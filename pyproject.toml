@@ -5,16 +5,19 @@ requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.141.1",
     "huggingface-hub>=1.31.0",
-    "mlx>=0.24",
-    "mlx-lm>=0.24",
     "numpy>=2.5.3",
     "safetensors>=0.8.0",
     "transformers>=5.17.0",
     "uvicorn[standard]>=0.53.0",
 ]
 
+# One backend extra per platform; install exactly the one you can run.
+# mlx must not be a base dependency: it installs on Linux but its libmlx.so is
+# absent, and transformers' _is_mlx_available() sees the metadata and then dies
+# importing it -- breaking the torch backend on any non-Apple host.
 [project.optional-dependencies]
-torch = ["torch>=2.14.0", "accelerate>=1.0"]   # only for jevlike comparison and HF cross-checks
+mlx = ["mlx>=0.24", "mlx-lm>=0.24"]                          # Apple silicon
+torch = ["torch>=2.14.0", "accelerate>=1.0", "bitsandbytes>=0.50.2"]  # CUDA / CPU
 doom = ["vizdoom>=1.2.4"]                         # demo/doom: play Doom in the terminal with the server choosing actions
 
 [project.scripts]
