@@ -215,7 +215,9 @@ def cmd_check(args: argparse.Namespace) -> None:
 def cmd_serve(args: argparse.Namespace) -> None:
     from .server import serve
 
-    serve(args.host, args.port, args.model, args.batch_size, args.backend, args.quantize)
+    heads = {t: p for t, p in (("choice", args.head_choice), ("score", args.head_score),
+                               ("noul", args.head_noul)) if p}
+    serve(args.host, args.port, args.model, args.batch_size, args.backend, args.quantize, heads or None)
 
 
 def cmd_features(args: argparse.Namespace) -> None:
@@ -311,7 +313,10 @@ def main(argv: list[str] | None = None) -> None:
     v.add_argument("--backend", choices=["mlx", "torch"], default="mlx",
                    help="scoring backend: mlx (default, Apple silicon) or torch (PyTorch)")
     v.add_argument("--quantize", choices=["none", "8bit", "4bit"], default="none",
-                   help="torch backend only: load the weights quantised via bitsandbytes")
+                     help="torch backend only: load the weights quantised via bitsandbytes")
+    v.add_argument("--head-choice", default=None, help="Route-A choice head checkpoint for /score and choice questions")
+    v.add_argument("--head-score", default=None, help="Route-A score head checkpoint for score questions")
+    v.add_argument("--head-noul", default=None, help="Route-A noul head checkpoint for noul questions")
     v.set_defaults(fn=cmd_serve)
 
     args = p.parse_args(argv)
