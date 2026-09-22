@@ -102,6 +102,7 @@ def cmd_eval(args: argparse.Namespace) -> None:
     fixed = _read_options(args.fixed_options) if args.fixed_options else None
     top1 = top3 = labelled = 0
     lat: list[float] = []
+    certainties: list[float] = []
     for i, row in enumerate(rows):
         options = row.get("options") or fixed
         if not options:
@@ -110,19 +111,37 @@ def cmd_eval(args: argparse.Namespace) -> None:
         lat.append(scorer.last_timing["total_s"])
         order = sorted(range(len(res)), key=lambda j: -res[j].score)
         label = row.get("label")
-        if label is not None:
+        labels = row.get("labels") or ([label] if label is not None else None)
+
+        # Certainty index: probability margin between top-2
+        probs = [r.probability for r in res]
+        sorted_probs = sorted(probs, reverse=True)
+        if len(sorted_probs) >= 2:
+            certainty = sorted_probs[0] - sorted_probs[1]
+        else:
+            certainty = 1.0
+        certainties.append(certainty)
+
+        if labels is not None:
             labelled += 1
-            top1 += order[0] == label
-            top3 += label in order[:3]
+            if len(labels) == 1:
+                top1 += order[0] in labels
+                top3 += any(l in order[:3] for l in labels)
+            else:
+                # Multi-label: top-1 must be one of the valid labels
+                top1 += order[0] in labels
+                top3 += sum(1 for l in labels if l in order[:3]) / len(labels)
         if args.verbose or label is None:
-            print(json.dumps({"i": i, "label": label, "pred": order[0], "pred_option": options[order[0]],
-                              "probs": [round(r.probability, 4) for r in res]}))
+            print(json.dumps({"i": i, "label": labels, "pred": order[0], "pred_option": options[order[0]],
+                              "probs": [round(p, 4) for p in probs], "certainty": round(certainty, 4)}))
     n = len(rows)
     print(json.dumps({
         "examples": n,
         "labelled": labelled,
         "top1": top1 / labelled if labelled else None,
         "top3": top3 / labelled if labelled else None,
+        "median_certainty": statistics.median(certainties) if certainties else None,
+        "low_certainty_count": sum(1 for c in certainties if c < 0.3),
         "norm": args.norm,
         "median_latency_s": statistics.median(lat),
         "mean_latency_s": statistics.fmean(lat),
