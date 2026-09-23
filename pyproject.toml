@@ -17,7 +17,13 @@ dependencies = [
 # importing it -- breaking the torch backend on any non-Apple host.
 [project.optional-dependencies]
 mlx = ["mlx>=0.24", "mlx-lm>=0.24"]                          # Apple silicon
-torch = ["torch>=2.14.0", "accelerate>=1.0", "bitsandbytes>=0.50.2"]  # CUDA / CPU
+torch = [
+    "torch==2.9.1; sys_platform == 'linux'",  # the cu128 build verified with bitsandbytes + peft
+    "torch>=2.9.1; sys_platform != 'linux'",
+    "accelerate>=1.0",
+    "bitsandbytes>=0.50.2",
+    "peft>=0.21.0",
+]  # CUDA / CPU
 doom = ["vizdoom>=1.2.4"]                         # demo/doom: play Doom in the terminal with the server choosing actions
 
 [project.scripts]
@@ -32,3 +38,14 @@ packages = ["openjev"]
 
 [dependency-groups]
 docs = ["mkdocs>=1.6", "mkdocs-material>=9.5", "mkdocstrings[python]>=0.26"]
+
+# On Linux, take torch from PyTorch's CUDA 12.8 index: the default PyPI wheel is
+# built for CUDA 13, which fails to load (undefined NCCL symbols) on drivers
+# that only support CUDA 12.x.
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu128", marker = "sys_platform == 'linux'" }]

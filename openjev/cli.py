@@ -243,6 +243,31 @@ def cmd_eval_head(args: argparse.Namespace) -> None:
                       "checkpoint": args.checkpoint, "rank": cfg["rank"]}, indent=2))
 
 
+def cmd_lora(args: argparse.Namespace) -> None:
+    from . import lora_torch
+
+    r = lora_torch.train(args.model, args.train, args.validation, args.out, test_path=args.test, sep=args.sep,
+                         quantize=args.quantize, rank=args.rank, alpha=args.alpha, epochs=args.epochs,
+                         lr=args.learning_rate, accum=args.accum, limit=args.limit,
+                         eval_every=args.eval_every, seed=args.seed,
+                         resume=args.resume, max_rows=args.max_rows, chat=args.chat)
+    print(json.dumps({k: r[k] for k in ("best_val_top1", "zero_shot", "test", "test_shuffled_context") if k in r}))
+
+
+def cmd_lora_eval(args: argparse.Namespace) -> None:
+    from . import lora_torch
+
+    print(json.dumps(lora_torch.eval_adapter(args.model, args.adapter, args.data, sep=args.sep,
+                                             quantize=args.quantize, zero_shot=not args.no_zero_shot,
+                                             chat=args.chat), indent=2))
+
+
+def cmd_lora_quantize(args: argparse.Namespace) -> None:
+    from . import lora_torch
+
+    print(json.dumps(lora_torch.quantize_int8(args.adapter, args.out or args.adapter.rstrip("/") + "-int8")))
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(prog="openjev", description=__doc__)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -304,6 +329,44 @@ def main(argv: list[str] | None = None) -> None:
     eh.add_argument("--backend", choices=["mlx", "torch"], default="mlx",
                     help="scoring backend: mlx (default, Apple silicon) or torch (PyTorch)")
     eh.set_defaults(fn=cmd_eval_head)
+
+    lo = sub.add_parser("lora", help="LoRA-tune the scorer (torch + peft, QLoRA) on JSONL rows")
+    lo.add_argument("train")
+    lo.add_argument("--validation", required=True)
+    lo.add_argument("--test", default=None, help="also report zero-shot vs tuned on this split")
+    lo.add_argument("--out", default="runs/lora")
+    lo.add_argument("--model", default=DEFAULT_MODEL)
+    lo.add_argument("--sep", default="\nChoice: ")
+    lo.add_argument("--quantize", choices=["none", "8bit", "4bit"], default="4bit")
+    lo.add_argument("--rank", type=int, default=16)
+    lo.add_argument("--alpha", type=int, default=32)
+    lo.add_argument("--epochs", type=int, default=1)
+    lo.add_argument("--learning-rate", type=float, default=2e-4)
+    lo.add_argument("--accum", type=int, default=8, help="rows per optimiser step")
+    lo.add_argument("--limit", type=int, default=0, help="use only the first N training rows")
+    lo.add_argument("--eval-every", type=int, default=0, help="validate every N rows (default: once per epoch)")
+    lo.add_argument("--seed", type=int, default=7)
+    lo.add_argument("--resume", default=None, help="continue training from this saved adapter dir")
+    lo.add_argument("--chat", action="store_true",
+                    help="chat format: context + option list as a user turn (much stronger on instruction-tuned models)")
+    lo.add_argument("--max-rows", type=int, default=0, help="stop after this many training rows")
+    lo.set_defaults(fn=cmd_lora)
+
+    le = sub.add_parser("lora-eval", help="top-k, ECE and shuffled-context control for a LoRA adapter vs zero-shot")
+    le.add_argument("adapter")
+    le.add_argument("data")
+    le.add_argument("--model", default=DEFAULT_MODEL)
+    le.add_argument("--sep", default="\nChoice: ")
+    le.add_argument("--quantize", choices=["none", "8bit", "4bit"], default="4bit")
+    le.add_argument("--chat", action="store_true",
+                    help="chat format: context + option list as a user turn (much stronger on instruction-tuned models)")
+    le.add_argument("--no-zero-shot", action="store_true", help="skip the adapter-disabled baseline")
+    le.set_defaults(fn=cmd_lora_eval)
+
+    lq = sub.add_parser("lora-quantize", help="store a LoRA adapter as int8 + per-row scales (~4x smaller)")
+    lq.add_argument("adapter")
+    lq.add_argument("--out", default=None, help="output dir (default: ADAPTER-int8)")
+    lq.set_defaults(fn=cmd_lora_quantize)
 
     v = sub.add_parser("serve", help="HTTP server with the model loaded once (POST /score, /v1/systemone)")
     v.add_argument("--model", default=DEFAULT_MODEL)

@@ -1,5 +1,5 @@
 """Hard movie-choice dataset: NO title leak in context, semantic genre match required."""
-import json, random
+import json, os, random, sys
 
 FILMS = {
     "Solaris Drift": ["deep-space exploration", "a lonely voyage beyond the heliopause", "generation-ship odyssey"],
@@ -34,9 +34,13 @@ def make_sample(rng, n_options):
         "film": target,
     }
 
-rng = random.Random(7)
-for split, n in [("train", 200), ("validation", 30), ("test", 30)]:
-    with open(f"data/synthetic/movies_hard/{split}.jsonl", "w") as f:
+# usage: gen_movies_hard.py [OUT_DIR] [N_TRAIN] [N_VAL] [N_TEST] [SEED]
+out = sys.argv[1] if len(sys.argv) > 1 else "data/synthetic/movies_hard"
+sizes = [int(x) for x in sys.argv[2:5]] or [200, 30, 30]
+rng = random.Random(int(sys.argv[5]) if len(sys.argv) > 5 else 7)
+os.makedirs(out, exist_ok=True)
+for split, n in zip(["train", "validation", "test"], sizes):
+    with open(f"{out}/{split}.jsonl", "w") as f:
         for _ in range(n):
-            f.write(json.dumps(make_sample(rng, random.randint(2, 8)), ensure_ascii=False) + "\n")
+            f.write(json.dumps(make_sample(rng, rng.randint(2, 8)), ensure_ascii=False) + "\n")
     print(f"{split}: {n} samples")
