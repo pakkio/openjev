@@ -217,7 +217,13 @@ def cmd_serve(args: argparse.Namespace) -> None:
 
     heads = {t: p for t, p in (("choice", args.head_choice), ("score", args.head_score),
                                ("noul", args.head_noul)) if p}
-    serve(args.host, args.port, args.model, args.batch_size, args.backend, args.quantize, heads or None)
+    lora = {}
+    for spec in args.lora:
+        name, sep, path = spec.partition("=")
+        if not sep or not name or not path:
+            raise SystemExit(f"--lora expects NAME=PATH, got {spec!r}")
+        lora[name] = path
+    serve(args.host, args.port, args.model, args.batch_size, args.backend, args.quantize, heads or None, lora or None)
 
 
 def cmd_features(args: argparse.Namespace) -> None:
@@ -380,6 +386,9 @@ def main(argv: list[str] | None = None) -> None:
     v.add_argument("--head-choice", default=None, help="Route-A choice head checkpoint for /score and choice questions")
     v.add_argument("--head-score", default=None, help="Route-A score head checkpoint for score questions")
     v.add_argument("--head-noul", default=None, help="Route-A noul head checkpoint for noul questions")
+    v.add_argument("--lora", action="append", default=[], metavar="NAME=PATH",
+                   help="LoRA mode (torch): load an adapter under NAME; repeatable. NAME choice/score/noul "
+                        "also serves that /v1/systemone question type")
     v.set_defaults(fn=cmd_serve)
 
     args = p.parse_args(argv)

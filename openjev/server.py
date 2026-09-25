@@ -70,6 +70,24 @@ class ScoreRequest(BaseModel):
     sep: str = ""
 
 
+class LoraScoreRequest(BaseModel):
+    context: str
+    options: list[str] = Field(min_length=2)
+    adapter: str | None = None  # None = the base model zero-shot
+    chat: bool = True
+    sep: str = "\nChoice: "
+
+
+class LoraScoreResponse(BaseModel):
+    best: str
+    best_index: int
+    adapter: str | None
+    chat: bool
+    probabilities: list[float]
+    logprob_sums: list[float]
+    timing: dict[str, float]
+
+
 class OptionOut(BaseModel):
     option: str
     n_tokens: int
@@ -106,8 +124,15 @@ def _resolve_heads(heads: dict | None) -> dict:
 
 
 def create_app(model_path: str | None = None, batch_size: int = 8, backend: str | None = None,
-               quantize: str | None = None, heads: dict | None = None) -> FastAPI:
+               quantize: str | None = None, heads: dict | None = None, lora: dict | None = None) -> FastAPI:
+    """lora: {name: adapter_dir}. When given (torch only), the server runs in LoRA mode: one
+    4-bit model through lora_serve.LoraEngine instead of OptionScorer, /v1/lora/score picks an
+    adapter per request, and /score + /v1/systemone use the chat format with the adapter named
+    after the question type ("choice", "score", "noul") when one is loaded, zero-shot otherwise.
+    """
     backend = _resolve_backend(backend)
+    if lora and backend != "torch":
+        raise ValueError("LoRA serving needs the torch backend")
     quantize = _resolve_quantize(quantize)
     head_paths = _resolve_heads(heads)
     model_path = model_path or os.environ.get("OPENJEV_MODEL") or _default_model(backend)
@@ -124,6 +149,14 @@ def create_app(model_path: str | None = None, batch_size: int = 8, backend: str 
     @app.on_event("startup")
     def _load() -> None:
         t = time.perf_counter()
+        if lora:
+            from .lora_serve import LoraEngine
+
+            state["lora"] = LoraEngine(model_path, lora, quantize if quantize != "none" else "4bit")
+            state["lora"].score("warm up", ["a", "b"])
+            state["heads"] = {}
+            state["load_s"] = time.perf_counter() - t
+            return
         kwargs = {"quantize": quantize} if backend == "torch" else {}
         scorer = OptionScorer(model_path, batch_size=batch_size, **kwargs)
         scorer.score("warm up", ["a", "b"])  # compile kernels / warm up before the first request
@@ -138,9 +171,31 @@ def create_app(model_path: str | None = None, batch_size: int = 8, backend: str 
 
     @app.get("/health")
     def health() -> dict:
-        return {"ok": "scorer" in state, "model": model_path, "backend": backend,
+        engine = state.get("lora")
+        return {"ok": "scorer" in state or engine is not None, "model": model_path, "backend": backend,
                 "quantize": quantize, "heads": sorted(state.get("heads", {})),
-                "load_s": state.get("load_s")}
+                "lora": sorted(engine.adapters) if engine else [], "load_s": state.get("load_s")}
+
+    def _lora_probs(qtype: str, context: str, options: list[str]) -> tuple[list[float], list[float]]:
+        engine = state["lora"]
+        try:
+            return engine.score(context, options, adapter=qtype if qtype in engine.adapters else None)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+
+    @app.post("/v1/lora/score", response_model=LoraScoreResponse)
+    def lora_score(req: LoraScoreRequest) -> LoraScoreResponse:
+        engine = state.get("lora")
+        if engine is None:
+            raise HTTPException(503 if "scorer" not in state else 404,
+                                "model still loading" if "scorer" not in state else "server not started with --lora")
+        try:
+            sums, probs = engine.score(req.context, req.options, adapter=req.adapter, chat=req.chat, sep=req.sep)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        best = max(range(len(probs)), key=lambda i: probs[i])
+        return LoraScoreResponse(best=req.options[best], best_index=best, adapter=req.adapter, chat=req.chat,
+                                 probabilities=probs, logprob_sums=sums, timing=engine.last_timing)
 
     def _head_probs(qtype: str, context: str, options: list[str]) -> list[float] | None:
         head = state.get("heads", {}).get(qtype)
@@ -153,6 +208,18 @@ def create_app(model_path: str | None = None, batch_size: int = 8, backend: str 
 
     @app.post("/score", response_model=ScoreResponse)
     def score(req: ScoreRequest) -> ScoreResponse:
+        if "lora" in state:  # LoRA mode: chat format, "choice" adapter if loaded
+            import math
+
+            sums, probs = _lora_probs("choice", req.context, req.options)
+            best = max(range(len(probs)), key=lambda i: probs[i])
+            return ScoreResponse(
+                best=req.options[best], best_index=best,
+                options=[OptionOut(option=o, n_tokens=0, logprob_sum=s, logprob_mean=s, logprob_uncond=None,
+                                   score=math.log(max(p, 1e-12)), probability=p)
+                         for o, s, p in zip(req.options, sums, probs)],
+                timing={"lora_mode": 1.0, **state["lora"].last_timing},
+            )
         scorer: OptionScorer = state.get("scorer")
         if scorer is None:
             raise HTTPException(503, "model still loading")
@@ -194,9 +261,10 @@ def create_app(model_path: str | None = None, batch_size: int = 8, backend: str 
         well-formed but off-distribution.
         """
         scorer: OptionScorer = state.get("scorer")
-        if scorer is None:
+        lora_mode = "lora" in state
+        if scorer is None and not lora_mode:
             raise HTTPException(503, "model still loading")
-        if not state.get("heads"):
+        if not state.get("heads") and not lora_mode:
             try:
                 return system_one(scorer, req, model_name=req.model or model_name)
             except ValueError as e:
@@ -217,7 +285,12 @@ def create_app(model_path: str | None = None, batch_size: int = 8, backend: str 
                 qtype = "noul"
             else:
                 raise HTTPException(400, f"unknown question type for {qid!r}")
-            probs = _head_probs(qtype, prompt, labels)
+            if lora_mode:
+                _, probs = _lora_probs(qtype, prompt, labels)
+                in_tok += int(state["lora"].last_timing["context_tokens"])
+                out_tok += int(state["lora"].last_timing["option_tokens"])
+            else:
+                probs = _head_probs(qtype, prompt, labels)
             if probs is None:  # no head for this type: fall back to zero-shot
                 try:
                     res = scorer.score(prompt, labels, norm="sum", chat=False, sep="")
@@ -245,7 +318,7 @@ def create_app(model_path: str | None = None, batch_size: int = 8, backend: str 
 
 
 def serve(host: str, port: int, model_path: str | None, batch_size: int, backend: str | None = None,
-          quantize: str | None = None, heads: dict | None = None) -> None:
+          quantize: str | None = None, heads: dict | None = None, lora: dict | None = None) -> None:
     import uvicorn
 
-    uvicorn.run(create_app(model_path, batch_size, backend, quantize, heads), host=host, port=port, workers=1)
+    uvicorn.run(create_app(model_path, batch_size, backend, quantize, heads, lora), host=host, port=port, workers=1)
