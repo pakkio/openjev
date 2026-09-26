@@ -16,6 +16,8 @@ import mlx.core as mx
 from mlx_lm import load
 from mlx_lm.models.cache import KVCache
 
+from .prompt import chat_message
+
 DEFAULT_MODEL = "models/gemma-3-4b-it"
 NORMS = ("mean", "sum", "pmi")
 
@@ -69,12 +71,15 @@ class OptionScorer:
         self.last_timing: dict[str, float] = {}
 
     # ------------------------------------------------------------------ text
-    def context_ids(self, context: str, chat: bool | None = None, sep: str | None = None) -> list[int]:
+    def context_ids(self, context: str, chat: bool | None = None, sep: str | None = None,
+                    options: Sequence[str] | None = None) -> list[int]:
+        """Token ids of the prefix. In the chat format the options, when given, are listed in the user
+        turn after the context (prompt.chat_message) and each option is then scored as the reply."""
         chat = self.chat if chat is None else chat
         sep = self.sep if sep is None else sep
         if chat:
             text = self.tok.apply_chat_template(
-                [{"role": "user", "content": context}],
+                [{"role": "user", "content": chat_message(context, options)}],
                 tokenize=False,
                 add_generation_prompt=True,
             )
@@ -147,7 +152,7 @@ class OptionScorer:
             raise ValueError("need at least two options")
         t0 = time.perf_counter()
         opts = [self.option_ids(o) for o in options]
-        ctx_ids = self.context_ids(context, chat=chat, sep=sep)
+        ctx_ids = self.context_ids(context, chat=chat, sep=sep, options=options)
         cache, last = self._prefill(ctx_ids)
         t1 = time.perf_counter()
         sums = self._score_with_prefix(cache, last, opts)
@@ -196,7 +201,7 @@ class OptionScorer:
         Returns the sum of option-token log-probs. Used to verify the prefix-shared
         batched path and to benchmark against it.
         """
-        ctx = self.context_ids(context)
+        ctx = self.context_ids(context, options=options)
         out = []
         for o in options:
             oid = self.option_ids(o)

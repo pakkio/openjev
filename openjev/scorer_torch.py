@@ -6,6 +6,7 @@ Score = log-probability of option tokens given the context.
 """
 from __future__ import annotations
 
+import copy
 import math
 import time
 from dataclasses import dataclass, asdict
@@ -13,7 +14,9 @@ from typing import Iterable, Sequence
 
 import torch
 import torch.nn.functional as F
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, DynamicCache
+from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+
+from .prompt import chat_message
 
 
 DEFAULT_MODEL = "google/gemma-3-4b-it"
@@ -64,23 +67,18 @@ def _softmax(xs: Sequence[float]) -> list[float]:
     return [e / z for e in exps]
 
 
-def _cache_tensors(past_key_values) -> list[tuple[torch.Tensor, torch.Tensor]]:
-    """Snapshot a Cache as plain (keys, values) tensors, one pair per layer."""
-    return [(layer.keys, layer.values) for layer in past_key_values.layers]
-
-
-def _repeat_kv(kv: list[tuple[torch.Tensor, torch.Tensor]], n: int) -> DynamicCache:
-    """Build a fresh Cache with the prefix KV replicated n times batch-wise.
+def _expand_cache(cache, n: int):
+    """A copy of the prefix Cache with every layer repeated n times batch-wise.
 
     A new Cache per chunk is required: the model appends the option tokens to
     whatever cache it is handed, so reusing one would corrupt the prefix.
+    Copying the model's own Cache (rather than rebuilding one from its tensors)
+    keeps each layer's cache type, so a sliding-window layer (Gemma 4, window
+    512) still knows it holds only the last `window` tokens of a longer prefix.
     """
-    return DynamicCache(
-        ddp_cache_data=[
-            (k.repeat_interleave(n, dim=0), v.repeat_interleave(n, dim=0))
-            for k, v in kv
-        ]
-    )
+    expanded = copy.deepcopy(cache)
+    expanded.batch_repeat_interleave(n)
+    return expanded
 
 
 def _device_map(quantize: str | None) -> str | dict:
@@ -97,6 +95,28 @@ def _device_map(quantize: str | None) -> str | dict:
     return "auto"
 
 
+def load_model(model_path: str, quantize: str | None = None):
+    """from_pretrained with a placement that fits a small card.
+
+    Gemma 4 E-series models carry a ~2.8B-param per-layer embedding table that
+    bitsandbytes cannot quantise; loaded whole onto an 8GB GPU it runs out of
+    memory. It is only ever indexed, so reuse the LoRA loader, which keeps it
+    (and the vision/audio towers) on the CPU and moves just the looked-up rows.
+    """
+    from .lora_torch import _is_gemma4_ple, load_model as load_split
+
+    if torch.cuda.is_available() and _is_gemma4_ple(AutoConfig.from_pretrained(model_path)):
+        model, _ = load_split(model_path, quantize or "none")
+        model.config.use_cache = True  # the LoRA loader turns it off for training
+        return model
+    return AutoModelForCausalLM.from_pretrained(
+        model_path,
+        dtype=torch.bfloat16,
+        device_map=_device_map(quantize),
+        quantization_config=quantization_config(quantize),
+    )
+
+
 class OptionScorer:
     def __init__(
         self,
@@ -109,13 +129,11 @@ class OptionScorer:
         self.model_path = model_path
         self.quantize = quantize or "none"
         self.tokenizer = AutoTokenizer.from_pretrained(model_path)
-        self.model = AutoModelForCausalLM.from_pretrained(
-            model_path,
-            dtype=torch.bfloat16,
-            device_map=_device_map(quantize),
-            quantization_config=quantization_config(quantize),
-        )
+        self.model = load_model(model_path, quantize)
         self.model.eval()
+        # With a split device map (Gemma 4, see load_model) model.device can name the CPU;
+        # inputs go wherever the token embeddings live.
+        self.device = self.model.get_input_embeddings().weight.device
         self.batch_size = max(1, batch_size)
         self.chat = chat
         self.sep = sep
@@ -130,12 +148,15 @@ class OptionScorer:
         self.last_timing: dict[str, float] = {}
 
     # ------------------------------------------------------------------ text
-    def context_ids(self, context: str, chat: bool | None = None, sep: str | None = None) -> list[int]:
+    def context_ids(self, context: str, chat: bool | None = None, sep: str | None = None,
+                    options: Sequence[str] | None = None) -> list[int]:
+        """Token ids of the prefix. In the chat format the options, when given, are listed in the user
+        turn after the context (prompt.chat_message) and each option is then scored as the reply."""
         chat = self.chat if chat is None else chat
         sep = self.sep if sep is None else sep
         if chat:
             text = self.tokenizer.apply_chat_template(
-                [{"role": "user", "content": context}],
+                [{"role": "user", "content": chat_message(context, options)}],
                 tokenize=False,
                 add_generation_prompt=True,
             )
@@ -168,15 +189,15 @@ class OptionScorer:
 
     # --------------------------------------------------------------- prefill
     def _prefill(self, ids: list[int]):
-        """Prefill the context, return (kv tensors, last context logits)."""
-        input_ids = torch.tensor([ids], dtype=torch.long, device=self.model.device)
+        """Prefill the context, return (its Cache, last context logits)."""
+        input_ids = torch.tensor([ids], dtype=torch.long, device=self.device)
         with torch.no_grad():
             outputs = self.model(input_ids, use_cache=True)
-        return _cache_tensors(outputs.past_key_values), outputs.logits[0, -1].float()
+        return outputs.past_key_values, outputs.logits[0, -1].float()
 
     def _score_with_prefix(
         self,
-        kv: list[tuple[torch.Tensor, torch.Tensor]],
+        cache,
         last_logits: torch.Tensor,
         opts: list[list[int]],
     ) -> list[float]:
@@ -188,14 +209,14 @@ class OptionScorer:
             L = max(len(x) for x in chunk)
 
             # Build padded tensor
-            arr = torch.full((n, L), self.pad_id, dtype=torch.long, device=self.model.device)
-            mask = torch.zeros((n, L), dtype=torch.float32, device=self.model.device)
+            arr = torch.full((n, L), self.pad_id, dtype=torch.long, device=self.device)
+            mask = torch.zeros((n, L), dtype=torch.float32, device=self.device)
             for i, x in enumerate(chunk):
                 arr[i, : len(x)] = torch.tensor(x, dtype=torch.long)
                 mask[i, : len(x)] = 1.0
 
             # Expand KV cache for this batch
-            expanded_cache = _repeat_kv(kv, n)
+            expanded_cache = _expand_cache(cache, n)
 
             with torch.no_grad():
                 outputs = self.model(
@@ -237,7 +258,7 @@ class OptionScorer:
 
         t0 = time.perf_counter()
         opts = [self.option_ids(o) for o in options]
-        ctx_ids = self.context_ids(context, chat=chat, sep=sep)
+        ctx_ids = self.context_ids(context, chat=chat, sep=sep, options=options)
         cache, last = self._prefill(ctx_ids)
         t1 = time.perf_counter()
         sums = self._score_with_prefix(cache, last, opts)
@@ -283,18 +304,18 @@ class OptionScorer:
 
     def score_naive(self, context: str, options: Sequence[str]) -> list[float]:
         """Reference: re-encode context + option from scratch per option."""
-        ctx = self.context_ids(context)
+        ctx = self.context_ids(context, options=options)
         out = []
         for o in options:
             oid = self.option_ids(o)
             ids = ctx + oid
-            input_ids = torch.tensor([ids], dtype=torch.long, device=self.model.device)
+            input_ids = torch.tensor([ids], dtype=torch.long, device=self.device)
             with torch.no_grad():
                 outputs = self.model(input_ids)
             logits = outputs.logits[0].float()
             pred = logits[len(ctx) - 1 : len(ctx) - 1 + len(oid)]
             lp = F.log_softmax(pred, dim=-1)
-            target = torch.tensor(oid, dtype=torch.long, device=self.model.device).unsqueeze(-1)
+            target = torch.tensor(oid, dtype=torch.long, device=self.device).unsqueeze(-1)
             s = lp.gather(-1, target).sum()
             out.append(s.cpu().item())
         return out

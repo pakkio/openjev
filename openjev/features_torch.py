@@ -1,7 +1,7 @@
 """Frozen-Gemma feature extraction for the trainable head (Route A, PyTorch backend).
 
 Same contract as openjev/features.py but uses HuggingFace transformers + PyTorch
-instead of MLX. Loads the model with ``device_map="auto"`` in ``bfloat16``,
+instead of MLX. Loads the model like the torch scorer (bfloat16, Gemma 4 split CPU/GPU),
 runs inference under ``torch.no_grad()``, and saves the extracted hidden states
 as numpy arrays in ``.npz`` files.
 """
@@ -16,15 +16,14 @@ import numpy as np
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from .scorer_torch import OptionScorer, _cache_tensors, _device_map, _repeat_kv, iter_jsonl
+from .scorer_torch import OptionScorer, _expand_cache, iter_jsonl, load_model
 
 
 class FeatureExtractor:
     """Extract hidden states from a frozen Gemma model for head training.
 
-    Uses HuggingFace transformers + PyTorch instead of MLX.  The model is loaded
-    with ``device_map="auto"`` and ``torch_dtype=torch.bfloat16``; inference
-    runs under ``torch.no_grad()``.
+    Uses HuggingFace transformers + PyTorch instead of MLX. The model is loaded
+    by ``scorer_torch.load_model``; inference runs under ``torch.no_grad()``.
     """
 
     def __init__(
@@ -74,7 +73,10 @@ class FeatureExtractor:
             hidden_states: (B, L, H) from the requested layer
             past_key_values: updated cache
         """
-        kwargs: dict = {}
+        # Ask for the cache explicitly: the Gemma 4 loader turns use_cache off
+        # (it is shared with LoRA training), and the text model reads its own
+        # config, so without this the prefix cache would silently be None.
+        kwargs: dict = {"use_cache": True}
         if cache is not None:
             kwargs["past_key_values"] = cache
 
@@ -94,15 +96,15 @@ class FeatureExtractor:
         return h, outputs.past_key_values
 
     @staticmethod
-    def _expand_cache(kv, n: int):
-        """Build a fresh batch-expanded Cache from snapshotted prefix KV tensors.
+    def _expand_cache(cache, n: int):
+        """A batch-expanded copy of the prefix Cache, fresh for every chunk.
 
         A new Cache per chunk is required: the model appends to whatever cache
         it is handed, so reusing one across chunks would corrupt the prefix.
         """
-        if kv is None:
+        if cache is None:
             return None
-        return _repeat_kv(kv, n)
+        return _expand_cache(cache, n)
 
     def extract(
         self,
@@ -122,7 +124,7 @@ class FeatureExtractor:
         ctx_tensor = torch.tensor([ctx_ids], dtype=torch.long, device=self.device)
         ctx_h, cache = self._forward(ctx_tensor)
         ctx_h = ctx_h[0].cpu()  # (Lc, H)
-        kv = _cache_tensors(cache)
+        kv = cache
 
         if not self.contextual:
             # Options stand alone: prefix is just BOS
@@ -130,8 +132,7 @@ class FeatureExtractor:
             if bos_id is None:
                 bos_id = self.tokenizer.bos_token_id or self.tokenizer.pad_token_id or 0
             bos_tensor = torch.tensor([[bos_id]], dtype=torch.long, device=self.device)
-            _, cache = self._forward(bos_tensor)
-            kv = _cache_tensors(cache)
+            _, kv = self._forward(bos_tensor)
 
         pooled = []
         for start in range(0, len(opts), self.s.batch_size):
@@ -172,7 +173,6 @@ def extract_dataset(
     contextual: bool = False,
     model_path: str | None = None,
     layer: int = -1,
-    device_map: str = "auto",
 ) -> dict:
     """Cache features for a jevlike JSONL {context, options, label} file into one .npz.
 
@@ -189,11 +189,7 @@ def extract_dataset(
         model = scorer.model
     else:
         tokenizer = AutoTokenizer.from_pretrained(model_path)
-        model = AutoModelForCausalLM.from_pretrained(
-            model_path,
-            dtype=torch.bfloat16,
-            device_map=device_map,
-        )
+        model = load_model(model_path, getattr(scorer, "quantize", None))
         model.eval()
 
     load_time = time.perf_counter() - t_load

@@ -23,6 +23,7 @@ import torch
 import torch.nn as nn
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
+from .prompt import chat_message
 from .scorer_torch import iter_jsonl
 
 TARGETS = r".*language_model\.layers\.\d+\.(self_attn|mlp)\.(q|k|v|o|gate|up|down)_proj"
@@ -133,8 +134,8 @@ def chat_ids(tok, context: str, options: list[str]) -> list[int]:
     Instruction-tuned Gemma is far stronger here than on plain `context + sep`
     (noul zero-shot 0.51 -> 1.00, news 0.23 -> 0.99 in our runs).
     """
-    msg = context + "\nOptions: " + "; ".join(options) + "\nAnswer with one option exactly."
-    text = tok.apply_chat_template([{"role": "user", "content": msg}], tokenize=False, add_generation_prompt=True)
+    text = tok.apply_chat_template([{"role": "user", "content": chat_message(context, options)}], tokenize=False,
+                                   add_generation_prompt=True)
     return tok.encode(text, add_special_tokens=False)
 
 
