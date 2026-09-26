@@ -10,3 +10,9 @@ _vizdoom.ini
 
 # mkdocs build output
 site/
+
+# third-party data: IMDb datasets (personal, non-commercial use) and BBC RSS snapshots
+data/imdb/
+data/bbc/
+# Excel lock files
+~$*

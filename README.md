@@ -45,7 +45,7 @@ finds the metadata, tries to import it, and dies -- taking the torch backend dow
 .venv/bin/openjev score --context "The capital of France is" \
     --option " Paris" --option " Berlin" --option " Lyon"
 
-# Chat template (context as user turn, options scored as the reply) + PMI normalisation
+# Chat template (context + the option list as a user turn, each option scored as the reply) + PMI normalisation
 .venv/bin/openjev score --chat --norm pmi --context "..." --option "..." --option "..."
 
 # Predefined options: one per line in a text file, reused for every context
@@ -125,6 +125,64 @@ zero-shot vs the numbers TypeSafe publishes for Jev:
 Same routing decision, but Gemma is over-confident and disagrees on the two judgement calls. Zero-shot
 probabilities are softmaxed next-token likelihoods, not calibrated judgements. Closing the gap means
 labelled data and a trained head (below).
+
+### openjev vs Jev on the synthetic test sets
+
+`jev_eval.py` sends each row of an openjev JSONL set to TypeSafe's hosted Jev as one System One
+request: the row's context is the `state`, its options are the criteria of a single `choice`
+question. It reports top-1, top-3 and ECE like `openjev lora-eval`, and caches every response in
+`runs/jev/<set>.jsonl` so a rerun only sends new rows. The key comes from `TYPESAFE_API_KEY` or
+`../.env`.
+
+`compare.py` runs every engine on the same rows in one go: Jev, openjev zero-shot (chat format with
+the options listed), and openjev with any number of LoRA adapters on one 4-bit base model. Each
+adapter is scored in the format it was trained in (from its `openjev_lora.json`, or a `:chat` /
+`:plain` suffix).
+
+```sh
+.venv/bin/python jev_eval.py data/synthetic/claims_verify/test.jsonl   # Jev only, one set
+.venv/bin/python compare.py data/synthetic/movies_general/test.jsonl \
+    movies=runs/lora-movies_general_v2:plain movies_int8=runs/lora-movies_general_v2-int8:plain
+```
+
+| engine (movies_general, 300 rows) | format | top-1 | top-3 | ECE | same pick as Jev | median s/row |
+|---|---|---|---|---|---|---|
+| jev | System One choice | 0.820 | 0.977 | 0.117 | 100% | 0.27 |
+| openjev | chat | 0.670 | 0.950 | 0.190 | 68% | 0.24 |
+| openjev | plain | 0.290 | 0.697 | 0.612 | 32% | 0.21 |
+| openjev + movies LoRA | plain | 1.000 | 1.000 | 0.001 | 82% | 0.22 |
+| openjev + movies LoRA, int8 | plain | 1.000 | 1.000 | 0.001 | 82% | 0.22 |
+
+Top-1 on the 300-row test splits (phrasings held out of training), 2026-09-26. Jev is `jev-1.13.0`;
+openjev is Gemma 4 E4B, 4-bit, on an RTX 4060 laptop GPU, zero-shot or with a LoRA adapter
+([LoRA fine-tuning](docs/lora.md)):
+
+| test set | Jev | openjev zero-shot | openjev + LoRA |
+|---|---|---|---|
+| news: headline -> 8 sections | **1.000** | 0.997 (chat) | 0.893 (plain format) |
+| claims_verify: abstract + claim -> supported / refuted / not enough info | **0.987** | 0.89 (chat, 100 rows) | training |
+| noul: does the review ask for a refund? | **0.993** | ~1.00 (chat, 100 rows) | 0.79 (plain format) |
+| claims_attrib: claim -> 1 of 8 full references | 0.820 | 0.79 (chat) | training (validation 0.80 after 500 rows) |
+| categorize: description -> 10 genres | 0.813 | 0.81 (chat) | **0.900** |
+| movies: request -> 1 of 10 made-up films | 0.820 | 0.29 (plain) | **1.000** |
+| claims_attrib_keys: claim -> 1 of 8 "Surname et al. (year)" keys | 0.117 | 0.14 | **1.000** |
+
+- Zero-shot, openjev in the chat format is close to Jev on the general tasks (news, noul,
+  categorize, attribution by reference); Jev is clearly ahead on claim verification.
+- LoRA wins where the answer depends on facts only the training data holds: invented papers behind
+  bare citation keys (1.000 vs 0.117, chance is 0.125), made-up film titles, genre rules. Jev cannot
+  be fine-tuned, so these stay near what it can infer from the text.
+- The sets were built to test exactly that, so they favour fine-tuning by construction; on a real
+  task the gap is as large as the private knowledge it needs.
+- Speed and cost: Jev's median latency was 0.27 s per question over the network and the whole run
+  (2,430 requests, ~850k input tokens) cost about $0.04. openjev on the laptop GPU takes ~1-2 s per
+  8-option question, costs nothing per call, keeps the data local, and needs 0.5-3 h of training
+  per task.
+
+Caveats: the openjev numbers come from the training runs, so a few are 100-row samples and some
+adapters used the plain rather than the chat format; the two systems also see the options
+differently (inside a chat turn vs as `choice` criteria). A like-for-like rerun of openjev on
+exactly these rows is pending.
 
 ## Training a head (per-task, on frozen Gemma features)
 
@@ -294,5 +352,7 @@ Full-resolution recording: [docs/media/doom-recording.mov](docs/media/doom-recor
 - `openjev/{scorer,features,head,train}_torch.py`: the `--backend torch` counterparts of the four
   modules above (`transformers` + `torch`, bitsandbytes quantisation). `systemone.py`, `server.py`
   and `cli.py` are backend-agnostic and import a backend only when one is selected.
+- `jev_eval.py`: scores a JSONL set with TypeSafe's hosted Jev for the openjev-vs-Jev comparison.
+- `compare.py`: Jev vs openjev zero-shot vs openjev + LoRA adapters on the same rows of one set.
 - `demo/doom/`: Doom in the terminal, the server picks every action (`make doom`).
 - `models/`: downloaded weights (git-ignored).
