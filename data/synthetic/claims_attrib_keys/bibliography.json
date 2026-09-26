@@ -1,0 +1,458 @@
+[
+ {
+  "key": "Mbeki et al. (2019)",
+  "entry": "Mbeki, Fischer and Walsh (2019). A sugar-free diet in adults over sixty: cluster trial. Urban Studies Review.",
+  "topic": "diet",
+  "intervention": "a sugar-free diet",
+  "population": "adults over sixty",
+  "findings": [
+   {
+    "outcome": "waist circumference",
+    "dir": "none",
+    "pct": 30
+   },
+   {
+    "outcome": "resting heart rate",
+    "dir": "up",
+    "pct": 31
+   }
+  ]
+ },
+ {
+  "key": "Novak et al. (2025)",
+  "entry": "Novak, Fischer and Walsh (2025). A sugar-free diet in university students: randomised trial. Occupational Wellbeing.",
+  "topic": "diet",
+  "intervention": "a sugar-free diet",
+  "population": "university students",
+  "findings": [
+   {
+    "outcome": "fasting glucose",
+    "dir": "down",
+    "pct": 41
+   },
+   {
+    "outcome": "systolic blood pressure",
+    "dir": "down",
+    "pct": 13
+   }
+  ]
+ },
+ {
+  "key": "Haddad et al. (2020)",
+  "entry": "Haddad, Fischer and Delacroix (2020). A high-protein breakfast in adults over sixty: twelve-week study. Urban Studies Review.",
+  "topic": "diet",
+  "intervention": "a high-protein breakfast",
+  "population": "adults over sixty",
+  "findings": [
+   {
+    "outcome": "waist circumference",
+    "dir": "down",
+    "pct": 44
+   },
+   {
+    "outcome": "body weight",
+    "dir": "none",
+    "pct": 35
+   }
+  ]
+ },
+ {
+  "key": "Lindqvist et al. (2024)",
+  "entry": "Lindqvist, Iyer and Brennan (2024). A weighted blanket in retired adults: two-year cohort study. Environmental Epidemiology Notes.",
+  "topic": "sleep",
+  "intervention": "a weighted blanket",
+  "population": "retired adults",
+  "findings": [
+   {
+    "outcome": "morning reaction time",
+    "dir": "none",
+    "pct": 30
+   },
+   {
+    "outcome": "evening melatonin levels",
+    "dir": "none",
+    "pct": 17
+   }
+  ]
+ },
+ {
+  "key": "Esposito et al. (2016)",
+  "entry": "Esposito, Novak and Rossi (2016). A weighted blanket in people with insomnia: controlled pilot study. Annals of Everyday Medicine.",
+  "topic": "sleep",
+  "intervention": "a weighted blanket",
+  "population": "people with insomnia",
+  "findings": [
+   {
+    "outcome": "night-time awakenings",
+    "dir": "down",
+    "pct": 14
+   },
+   {
+    "outcome": "daytime sleepiness",
+    "dir": "none",
+    "pct": 38
+   }
+  ]
+ },
+ {
+  "key": "Kowalski et al. (2018)",
+  "entry": "Kowalski, Ahmadi and Haddad (2018). Blue-light glasses in retired adults: controlled pilot study. Environmental Epidemiology Notes.",
+  "topic": "sleep",
+  "intervention": "blue-light glasses",
+  "population": "retired adults",
+  "findings": [
+   {
+    "outcome": "morning reaction time",
+    "dir": "up",
+    "pct": 36
+   },
+   {
+    "outcome": "total sleep time",
+    "dir": "none",
+    "pct": 37
+   }
+  ]
+ },
+ {
+  "key": "Iyer et al. (2009)",
+  "entry": "Iyer, Petrov and Ahmadi (2009). A stair-climbing programme in sedentary adults: two-year cohort study. Urban Studies Review.",
+  "topic": "exercise",
+  "intervention": "a stair-climbing programme",
+  "population": "sedentary adults",
+  "findings": [
+   {
+    "outcome": "grip strength",
+    "dir": "down",
+    "pct": 32
+   },
+   {
+    "outcome": "falls per year",
+    "dir": "none",
+    "pct": 9
+   }
+  ]
+ },
+ {
+  "key": "Holm et al. (2013)",
+  "entry": "Holm, Sato and Tanaka (2013). A stair-climbing programme in cancer survivors: randomised trial. Journal of Applied Health.",
+  "topic": "exercise",
+  "intervention": "a stair-climbing programme",
+  "population": "cancer survivors",
+  "findings": [
+   {
+    "outcome": "VO2 max",
+    "dir": "down",
+    "pct": 31
+   },
+   {
+    "outcome": "lower-back pain",
+    "dir": "down",
+    "pct": 33
+   }
+  ]
+ },
+ {
+  "key": "Delacroix et al. (2022)",
+  "entry": "Delacroix, Rossi and Petrov (2022). Group swimming lessons in sedentary adults: randomised trial. Education Research Quarterly.",
+  "topic": "exercise",
+  "intervention": "group swimming lessons",
+  "population": "sedentary adults",
+  "findings": [
+   {
+    "outcome": "grip strength",
+    "dir": "down",
+    "pct": 44
+   },
+   {
+    "outcome": "muscle mass",
+    "dir": "down",
+    "pct": 20
+   }
+  ]
+ },
+ {
+  "key": "Moreau et al. (2021)",
+  "entry": "Moreau, Mancini and Holm (2021). HEPA air purifiers in elderly city residents: cluster trial. Public Health Letters.",
+  "topic": "air",
+  "intervention": "HEPA air purifiers",
+  "population": "elderly city residents",
+  "findings": [
+   {
+    "outcome": "indoor PM2.5 concentration",
+    "dir": "down",
+    "pct": 39
+   },
+   {
+    "outcome": "asthma attacks",
+    "dir": "down",
+    "pct": 35
+   }
+  ]
+ },
+ {
+  "key": "Sato et al. (2012)",
+  "entry": "Sato, Varga and Delacroix (2012). HEPA air purifiers in outdoor workers: twelve-week study. Environmental Epidemiology Notes.",
+  "topic": "air",
+  "intervention": "HEPA air purifiers",
+  "population": "outdoor workers",
+  "findings": [
+   {
+    "outcome": "hospital admissions for bronchitis",
+    "dir": "up",
+    "pct": 10
+   },
+   {
+    "outcome": "lung function",
+    "dir": "none",
+    "pct": 15
+   }
+  ]
+ },
+ {
+  "key": "Okafor et al. (2010)",
+  "entry": "Okafor, Walsh and Ahmadi (2010). Window filters in elderly city residents: twelve-week study. Education Research Quarterly.",
+  "topic": "air",
+  "intervention": "window filters",
+  "population": "elderly city residents",
+  "findings": [
+   {
+    "outcome": "indoor PM2.5 concentration",
+    "dir": "up",
+    "pct": 37
+   },
+   {
+    "outcome": "inhaler use",
+    "dir": "none",
+    "pct": 29
+   }
+  ]
+ },
+ {
+  "key": "Brennan et al. (2011)",
+  "entry": "Brennan, Ahmadi and Chowdhury (2011). Daily reading aloud in primary-school pupils: two-year cohort study. Urban Studies Review.",
+  "topic": "education",
+  "intervention": "daily reading aloud",
+  "population": "primary-school pupils",
+  "findings": [
+   {
+    "outcome": "self-reported anxiety",
+    "dir": "down",
+    "pct": 6
+   },
+   {
+    "outcome": "maths test scores",
+    "dir": "none",
+    "pct": 25
+   }
+  ]
+ },
+ {
+  "key": "Rossi et al. (2017)",
+  "entry": "Rossi, Castillo and Ahmadi (2017). Daily reading aloud in adult learners: cluster trial. Environmental Epidemiology Notes.",
+  "topic": "education",
+  "intervention": "daily reading aloud",
+  "population": "adult learners",
+  "findings": [
+   {
+    "outcome": "classroom disruptions",
+    "dir": "down",
+    "pct": 36
+   },
+   {
+    "outcome": "absenteeism",
+    "dir": "none",
+    "pct": 41
+   }
+  ]
+ },
+ {
+  "key": "Chowdhury et al. (2014)",
+  "entry": "Chowdhury, Kowalski and Moreau (2014). Outdoor lessons in primary-school pupils: cluster trial. Public Health Letters.",
+  "topic": "education",
+  "intervention": "outdoor lessons",
+  "population": "primary-school pupils",
+  "findings": [
+   {
+    "outcome": "self-reported anxiety",
+    "dir": "down",
+    "pct": 32
+   },
+   {
+    "outcome": "reading fluency",
+    "dir": "up",
+    "pct": 34
+   }
+  ]
+ },
+ {
+  "key": "Petrov et al. (2008)",
+  "entry": "Petrov, Petrov and Kim (2008). Fully remote work in public-sector clerks: cluster trial. Public Health Letters.",
+  "topic": "work",
+  "intervention": "fully remote work",
+  "population": "public-sector clerks",
+  "findings": [
+   {
+    "outcome": "sick days",
+    "dir": "down",
+    "pct": 35
+   },
+   {
+    "outcome": "commute time",
+    "dir": "down",
+    "pct": 13
+   }
+  ]
+ },
+ {
+  "key": "Duarte et al. (2015)",
+  "entry": "Duarte, Walsh and Delacroix (2015). Fully remote work in software engineers: two-year cohort study. Urban Studies Review.",
+  "topic": "work",
+  "intervention": "fully remote work",
+  "population": "software engineers",
+  "findings": [
+   {
+    "outcome": "staff turnover",
+    "dir": "down",
+    "pct": 15
+   },
+   {
+    "outcome": "self-rated productivity",
+    "dir": "down",
+    "pct": 29
+   }
+  ]
+ },
+ {
+  "key": "Walsh et al. (2023)",
+  "entry": "Walsh, Nakamura and Andersen (2023). Quiet rooms in public-sector clerks: two-year cohort study. Public Health Letters.",
+  "topic": "work",
+  "intervention": "quiet rooms",
+  "population": "public-sector clerks",
+  "findings": [
+   {
+    "outcome": "sick days",
+    "dir": "down",
+    "pct": 29
+   },
+   {
+    "outcome": "burnout scores",
+    "dir": "up",
+    "pct": 16
+   }
+  ]
+ },
+ {
+  "key": "Oyelaran et al. (2019)",
+  "entry": "Oyelaran, Petrov and Tanaka (2019). Green roofs in suburban commuters: randomised trial. Journal of Applied Health.",
+  "topic": "city",
+  "intervention": "green roofs",
+  "population": "suburban commuters",
+  "findings": [
+   {
+    "outcome": "reported loneliness",
+    "dir": "up",
+    "pct": 11
+   },
+   {
+    "outcome": "street crime",
+    "dir": "down",
+    "pct": 19
+   }
+  ]
+ },
+ {
+  "key": "Andersen et al. (2025)",
+  "entry": "Andersen, Delacroix and Petrov (2025). Green roofs in social-housing tenants: two-year cohort study. Environmental Epidemiology Notes.",
+  "topic": "city",
+  "intervention": "green roofs",
+  "population": "social-housing tenants",
+  "findings": [
+   {
+    "outcome": "traffic injuries",
+    "dir": "up",
+    "pct": 31
+   },
+   {
+    "outcome": "cycling trips",
+    "dir": "down",
+    "pct": 6
+   }
+  ]
+ },
+ {
+  "key": "Nakamura et al. (2020)",
+  "entry": "Nakamura, Kowalski and Sato (2020). Public drinking fountains in suburban commuters: cluster trial. Occupational Wellbeing.",
+  "topic": "city",
+  "intervention": "public drinking fountains",
+  "population": "suburban commuters",
+  "findings": [
+   {
+    "outcome": "reported loneliness",
+    "dir": "down",
+    "pct": 12
+   },
+   {
+    "outcome": "heat-related deaths",
+    "dir": "up",
+    "pct": 40
+   }
+  ]
+ },
+ {
+  "key": "Mancini et al. (2024)",
+  "entry": "Mancini, Tanaka and Andersen (2024). A flu vaccine booster in patients with hypertension: twelve-week study. Occupational Wellbeing.",
+  "topic": "medicine",
+  "intervention": "a flu vaccine booster",
+  "population": "patients with hypertension",
+  "findings": [
+   {
+    "outcome": "bone density",
+    "dir": "down",
+    "pct": 11
+   },
+   {
+    "outcome": "emergency visits",
+    "dir": "down",
+    "pct": 27
+   }
+  ]
+ },
+ {
+  "key": "Varga et al. (2016)",
+  "entry": "Varga, Keller and Tanaka (2016). A flu vaccine booster in people with chronic pain: two-year cohort study. Public Health Letters.",
+  "topic": "medicine",
+  "intervention": "a flu vaccine booster",
+  "population": "people with chronic pain",
+  "findings": [
+   {
+    "outcome": "depression scores",
+    "dir": "up",
+    "pct": 22
+   },
+   {
+    "outcome": "hospital readmissions",
+    "dir": "down",
+    "pct": 23
+   }
+  ]
+ },
+ {
+  "key": "Ferreira et al. (2018)",
+  "entry": "Ferreira, Novak and Lindqvist (2018). Text-message reminders in patients with hypertension: randomised trial. Journal of Applied Health.",
+  "topic": "medicine",
+  "intervention": "text-message reminders",
+  "population": "patients with hypertension",
+  "findings": [
+   {
+    "outcome": "bone density",
+    "dir": "down",
+    "pct": 31
+   },
+   {
+    "outcome": "infection rates",
+    "dir": "up",
+    "pct": 31
+   }
+  ]
+ }
+]
